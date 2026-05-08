@@ -18,6 +18,7 @@ package types
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"time"
 
@@ -58,7 +59,7 @@ func (e OCIImageExtractor) ExtractImage(imageRef, destination, platformRef strin
 	var img containerregistry.Image
 
 	err = backoff.Retry(func() error {
-		img, err = image(ref, *platform, local)
+		img, err = image(ref, *platform, local, verify)
 		return err
 	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 3))
 	if err != nil {
@@ -76,14 +77,36 @@ func (e OCIImageExtractor) ExtractImage(imageRef, destination, platformRef strin
 	return digest.String(), err
 }
 
-func image(ref name.Reference, platform containerregistry.Platform, local bool) (containerregistry.Image, error) {
+func image(ref name.Reference, platform containerregistry.Platform, local bool, verify bool) (containerregistry.Image, error) {
 	if local {
 		return daemon.Image(ref)
 	}
 
 	return remote.Image(ref,
-		remote.WithTransport(http.DefaultTransport),
+		remote.WithTransport(registryTransport(verify)),
 		remote.WithPlatform(platform),
 		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 	)
+}
+
+func registryTransport(verify bool) http.RoundTripper {
+	if verify {
+		return http.DefaultTransport
+	}
+
+	defaultTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // #nosec G402 -- requested by --tls-verify=false.
+		}
+	}
+
+	transport := defaultTransport.Clone()
+	if transport.TLSClientConfig == nil {
+		transport.TLSClientConfig = &tls.Config{}
+	} else {
+		transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+	}
+	transport.TLSClientConfig.InsecureSkipVerify = true // #nosec G402 -- requested by --tls-verify=false.
+	return transport
 }
