@@ -108,12 +108,19 @@ else
             exit 1 ;;
     esac
 
+    # With fsck.mode=force, elemental-fsck runs inside dracut-initqueue.service
+    # and holds each partition open exclusively while checking it. Mount the
+    # state partition only after the initqueue is done; otherwise the mount can
+    # fail with EBUSY while COS_STATE is being checked, or win the race and get
+    # COS_STATE skipped by fsck. The btrfs sysroot.mount above is already ordered
+    # after the initqueue through dracut-pre-mount.service.
     {
         echo "[Unit]"
         echo "Before=initrd-root-fs.target"
         echo "DefaultDependencies=no"
         echo "After=initrd-root-device.target"
         echo "Wants=initrd-root-device.target"
+        echo "After=dracut-initqueue.service"
         echo "[Mount]"
         echo "Where=${root_part_mnt}"
         echo "What=${root}"
