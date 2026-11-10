@@ -18,11 +18,15 @@ oem_unit="oem.mount"
 
 if [ -n "${oem_label}" ]; then
     dev=$(dev_unit_name /dev/disk/by-label/${oem_label})
+    # Mount OEM only after the dracut initqueue: with fsck.mode=force,
+    # elemental-fsck checks every partition from there, and mounting COS_OEM
+    # while it is being checked fails with EBUSY (or gets it skipped by fsck).
     {
         echo "[Unit]"
         echo "DefaultDependencies=no"
         echo "After=basic.target"
         echo "Wants=basic.target"
+        echo "After=dracut-initqueue.service"
         echo "PartOf=initrd.target"
         echo "[Mount]"
         echo "Where=/oem"
