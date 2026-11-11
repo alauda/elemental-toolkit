@@ -130,10 +130,26 @@ func (s snapperBackend) CommitSnapshot(rootDir string, snapshot *types.Snapshot)
 	args = append(s.rootArgs(rootDir), args...)
 	cmdOut, err := s.cfg.Runner.Run("snapper", args...)
 	if err != nil {
+		if snapperLacksModifyFlags(cmdOut) {
+			// Older snapper releases (e.g. 0.8.16 shipped by SLE Micro 5.5) only support
+			// --description, --cleanup-algorithm and --userdata for the modify command.
+			// Fall back to the plain btrfs commit: it clears the same userdata keys in the
+			// snapshot info.xml and sets the read-only property and the default subvolume,
+			// which is what snapper itself does for these flags.
+			s.cfg.Logger.Warnf("snapper does not support 'modify --read-only --default', committing snapshot %d with btrfs: %s", snapshot.ID, strings.TrimSpace(string(cmdOut)))
+			return s.btrfs.CommitSnapshot(rootDir, snapshot)
+		}
 		s.cfg.Logger.Errorf("failed clearing userdata for snapshot %d: %s", snapshot.ID, string(cmdOut))
 		return err
 	}
 	return nil
+}
+
+// snapperLacksModifyFlags reports whether a failed 'snapper modify' call was rejected because
+// the installed snapper does not know the --read-only or --default options.
+func snapperLacksModifyFlags(out []byte) bool {
+	msg := string(out)
+	return strings.Contains(msg, "Unknown option '--read-only'") || strings.Contains(msg, "Unknown option '--default'")
 }
 
 // ListSnapshots list the available snapshots in the state filesystem

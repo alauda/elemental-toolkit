@@ -277,6 +277,44 @@ var _ = Describe("snapperBackend", Label("snapshotter", " btrfs"), func() {
 					})).To(Succeed())
 				})
 
+				It("falls back to a btrfs commit when snapper modify lacks --read-only and --default", func() {
+					modifyCmd := "snapper --no-dbus --root /some/root/.snapshots/1/snapshot modify"
+					sEffects = append(sEffects, &sideEffect{
+						cmd:      modifyCmd,
+						cmdOut:   "Unknown option '--read-only' for command 'modify'.\n",
+						errorMsg: "exit status 1",
+					})
+					volSideEffect.cmdOut += "ID 260 gen 13455 top level 258 path @/.snapshots/2/snapshot\n"
+					infoXML := filepath.Join(rootDir, ".snapshots/2/info.xml")
+					Expect(utils.MkdirAll(fs, filepath.Dir(infoXML), constants.DirPerm)).To(Succeed())
+					Expect(fs.WriteFile(infoXML, []byte(
+						"<?xml version=\"1.0\"?>\n<snapshot>\n  <type>single</type>\n  <num>2</num>\n"+
+							"  <userdata>\n    <key>update-in-progress</key>\n    <value>yes</value>\n  </userdata>\n</snapshot>\n",
+					), constants.FilePerm)).To(Succeed())
+
+					err = backend.CommitSnapshot(rootDir, snap)
+					Expect(err).To(Succeed())
+					Expect(runner.MatchMilestones([][]string{
+						strings.Fields(modifyCmd),
+						{"btrfs", "property", "set", snap.Path, "ro", "true"},
+						{"btrfs", "subvolume", "set-default", "260"},
+					})).To(Succeed())
+					data, err := fs.ReadFile(infoXML)
+					Expect(err).To(Succeed())
+					Expect(string(data)).NotTo(ContainSubstring("update-in-progress"))
+				})
+
+				It("does not fall back to btrfs on other snapper modify errors", func() {
+					modifyCmd := "snapper --no-dbus --root /some/root/.snapshots/1/snapshot modify"
+					sEffects = append(sEffects, &sideEffect{cmd: modifyCmd, cmdOut: "Snapshot '2' not found.\n", errorMsg: "exit status 1"})
+
+					err = backend.CommitSnapshot(rootDir, snap)
+					Expect(err).NotTo(Succeed())
+					for _, c := range runner.GetCmds() {
+						Expect(c[0]).NotTo(Equal("btrfs"))
+					}
+				})
+
 				It("lists expected snapshots", func() {
 					listCmd := "snapper --no-dbus --root /some/root/.snapshots/1/snapshot --csvout list"
 					cmdOut := "0,no,no\n1,yes,yes\n"

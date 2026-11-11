@@ -259,7 +259,7 @@ func (b *Btrfs) CloseTransaction(snapshot *types.Snapshot) (err error) {
 
 	err = b.backend.CommitSnapshot(b.rootDir, snapshot)
 	if err != nil {
-		b.cfg.Logger.Errorf("failed relabelling snapshot path: %s", snapshot.Path)
+		b.cfg.Logger.Errorf("failed committing snapshot %d: %v", snapshot.ID, err)
 		return err
 	}
 
