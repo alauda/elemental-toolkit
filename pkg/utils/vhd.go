@@ -24,7 +24,7 @@ import (
 	"os"
 	"time"
 
-	uuidPkg "github.com/distribution/distribution/uuid"
+	uuidPkg "github.com/google/uuid"
 )
 
 // This file contains utils to work with VHD disks
@@ -68,7 +68,7 @@ func newVHDFixed(size uint64) VHDHeader {
 	header.DiskGeometry[3] = uint8(geometry.sectorsPerTrack)
 	hexToField("00000002", header.DiskType[:]) // Fixed 0x00000002
 	hexToField("00000000", header.Checksum[:])
-	uuid := uuidPkg.Generate()
+	uuid := uuidPkg.New()
 	copy(header.UniqueID[:], uuid.String())
 	generateChecksum(&header)
 	return header

@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/distribution/distribution/reference"
+	"github.com/distribution/reference"
 	"github.com/joho/godotenv"
 	"github.com/twpayne/go-vfs/v4"
 

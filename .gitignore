@@ -1,4 +1,4 @@
-build/
+/build/
 isowork/
 *.iso
 *.iso.sha256
